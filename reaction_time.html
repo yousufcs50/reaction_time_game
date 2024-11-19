@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reaction Time Game</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+
+        #prompt {
+            font-size: 2rem;
+            margin: 20px;
+        }
+
+        button {
+            padding: 15px;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        #result {
+            font-size: 1.5rem;
+            margin-top: 20px;
+        }
+
+        #nameInput {
+            margin: 10px;
+            padding: 10px;
+            font-size: 1.2rem;
+        }
+
+        #leaderboard {
+            margin-top: 30px;
+            font-size: 1.2rem;
+        }
+
+        .light-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .light {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: #555;
+            box-shadow: 0 0 0px rgba(0, 0, 0, 0);
+        }
+
+        .light.red.active {
+            background-color: red;
+            box-shadow: 0 0 20px red;
+        }
+
+        .light.green.active {
+            background-color: green;
+            box-shadow: 0 0 20px green;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Reaction Time Tester</h1>
+    <input type="text" id="nameInput" placeholder="Enter your name">
+    <div class="light-container" id="lightContainer">
+        <div class="light red" id="redLight1"></div>
+        <div class="light red" id="redLight2"></div>
+        <div class="light red" id="redLight3"></div>
+        <div class="light red" id="redLight4"></div>
+        <div class="light red" id="redLight5"></div>
+    </div>
+    <div id="prompt">Press Start to Begin...</div>
+    <button id="startButton">Start</button>
+    <div id="result"></div>
+    <div id="leaderboard">
+        <h3>Leaderboard</h3>
+        <ol id="leaderboardList"></ol>
+    </div>
+
+    <script>
+        let startTime, endTime;
+
+        function waitForPrompt() {
+            const userName = document.getElementById('nameInput').value;
+            if (!userName) {
+                alert('Please enter your name to start.');
+                return;
+            }
+            document.getElementById('startButton').style.display = 'none';
+            const redLights = [
+                document.getElementById('redLight1'),
+                document.getElementById('redLight2'),
+                document.getElementById('redLight3'),
+                document.getElementById('redLight4'),
+                document.getElementById('redLight5')
+            ];
+            let currentLight = 0;
+
+            function activateNextRedLight() {
+                if (currentLight < redLights.length) {
+                    redLights[currentLight].classList.add('active');
+                    currentLight++;
+                    const randomDelay = Math.floor(Math.random() * 600) + 200; // Random delay between 200-800ms
+                    setTimeout(activateNextRedLight, randomDelay);
+                } else {
+                    setTimeout(() => {
+                        document.getElementById('prompt').innerText = 'GO!';
+                        redLights.forEach(light => light.classList.remove('active'));
+                        redLights.forEach(light => light.classList.add('green', 'active')); // Turn all lights green
+                        startTime = performance.now();
+                        document.body.addEventListener('click', userReaction);
+                    }, Math.floor(Math.random() * 2000) + 1000); // Random delay between 1-3 seconds
+                }
+            }
+
+            document.getElementById('prompt').innerText = 'Wait for it...';
+            activateNextRedLight();
+        }
+
+        function userReaction() {
+            if (startTime) {
+                endTime = performance.now();
+                const reactionTime = endTime - startTime;
+                document.getElementById('result').innerText = `Your reaction time is ${reactionTime.toFixed(2)} ms`;
+                saveReactionTime(reactionTime);
+                resetGame();
+            }
+        }
+
+        function saveReactionTime(reactionTime) {
+            const userName = document.getElementById('nameInput').value;
+            const currentDate = new Date().toISOString();
+
+            fetch('http://localhost:3000/api/reaction-time', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: userName,
+                    reactionTime: reactionTime,
+                    date: currentDate
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Success:', data);
+                    fetchLeaderboard();
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                });
+        }
+
+        function fetchLeaderboard() {
+            fetch('http://localhost:3000/api/leaderboard')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Leaderboard data:', data); // Debugging log
+                    const leaderboardList = document.getElementById('leaderboardList');
+                    leaderboardList.innerHTML = '';
+
+                    data.forEach((entry, index) => {
+                        if (index < 3) {
+                            const listItem = document.createElement('li');
+                            listItem.textContent = `${entry.name}: ${entry.reactionTime.toFixed(2)} ms on ${new Date(entry.date).toLocaleDateString()}`;
+                            leaderboardList.appendChild(listItem);
+                        }
+                    });
+                })
+                .catch((error) => {
+                    console.error('Error fetching leaderboard:', error); // Debugging log
+                });
+        }
+
+        function resetGame() {
+            document.getElementById('prompt').innerText = 'Press Start to Begin...';
+            document.getElementById('startButton').style.display = 'block';
+            document.getElementById('lightContainer').innerHTML = '';
+            document.getElementById('lightContainer').innerHTML = `
+                <div class="light red" id="redLight1"></div>
+                <div class="light red" id="redLight2"></div>
+                <div class="light red" id="redLight3"></div>
+                <div class="light red" id="redLight4"></div>
+                <div class="light red" id="redLight5"></div>
+            `;
+            document.body.removeEventListener('click', userReaction);
+            startTime = null;
+        }
+
+        document.getElementById('startButton').addEventListener('click', waitForPrompt);
+    </script>
+</body>
+
+</html>
